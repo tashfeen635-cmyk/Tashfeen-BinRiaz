@@ -470,18 +470,23 @@
       });
       var triggerJacketRule = hasBlack && hasMedium;
 
-      if (triggerJacketRule) {
-        var jacketId = findSoftWinterJacketVariant();
+      /* Resolve jacket variant (async-safe), then POST to cart */
+      var jacketAdded = false;
+      var jacketPromise = triggerJacketRule
+        ? findSoftWinterJacketVariant()
+        : Promise.resolve(null);
+
+      jacketPromise
+      .then(function(jacketId) {
         if (jacketId) {
           items.push({ id: jacketId, quantity: 1 });
+          jacketAdded = true;
         }
-      }
-
-      /* POST to Shopify Cart API */
-      fetch('/cart/add.js', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: items })
+        return fetch('/cart/add.js', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: items })
+        });
       })
       .then(function(response) {
         if (!response.ok) throw new Error('Failed to add to cart');
@@ -489,7 +494,7 @@
       })
       .then(function() {
         var msg = 'Added to cart!';
-        if (triggerJacketRule) {
+        if (jacketAdded) {
           msg += ' Soft Winter Jacket was also added.';
         }
         statusEl.textContent = msg;
@@ -508,39 +513,35 @@
 
     /* ============================================================
        FIND SOFT WINTER JACKET VARIANT
-       First checks the preloaded grid products for a matching title.
-       If not found, fetches by handle as an async fallback.
-       Returns the variant ID or null.
+       Returns a Promise that resolves with the variant ID.
+       First checks preloaded grid products (sync resolve).
+       Falls back to fetching /products/soft-winter-jacket.js.
+       Resolves with null if the product cannot be found.
        ============================================================ */
     function findSoftWinterJacketVariant() {
-      /* Search preloaded products */
+      /* Search preloaded products first (synchronous path) */
       for (var handle in productsData) {
         var p = productsData[handle];
         if (p.title.toLowerCase() === 'soft winter jacket') {
           var available = p.variants.find(function(v) { return v.available; });
-          return available ? available.id : p.variants[0].id;
+          return Promise.resolve(available ? available.id : p.variants[0].id);
         }
       }
 
-      /* Async fallback: fetch product by handle and add separately */
-      fetch('/products/soft-winter-jacket.js')
+      /* Fallback: fetch product by handle from Shopify */
+      return fetch('/products/soft-winter-jacket.js')
         .then(function(res) { return res.json(); })
         .then(function(jacket) {
           if (jacket && jacket.variants && jacket.variants.length > 0) {
             var v = jacket.variants.find(function(v) { return v.available; });
-            var id = v ? v.id : jacket.variants[0].id;
-            return fetch('/cart/add.js', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ items: [{ id: id, quantity: 1 }] })
-            });
+            return v ? v.id : jacket.variants[0].id;
           }
+          return null;
         })
         .catch(function(err) {
-          console.warn('Could not auto-add Soft Winter Jacket:', err);
+          console.warn('Could not find Soft Winter Jacket:', err);
+          return null;
         });
-
-      return null;
     }
 
     /* ============================================================
