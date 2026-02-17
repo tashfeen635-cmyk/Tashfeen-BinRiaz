@@ -18,7 +18,8 @@
         "heading": "The Gift Guide",
         "description": "<p>Discover Joy: Your Ultimate Holiday Gift Destination. Explore our curated selection and find the perfect gifts to delight your loved ones this holiday season.</p>",
         "shop_label": "SHOP NOW",
-        "strip_text": "SUSTAINABLE, ETHICALLY MADE CLOTHES IN SIZES XXS TO 6XL"
+        "strip_text": "SUSTAINABLE, ETHICALLY MADE CLOTHES IN SIZES XXS TO 6XL",
+        "hero_image": "shopify://shop_images/gift-guide-hero.jpg"
       }
     },
     "gift_grid": {
