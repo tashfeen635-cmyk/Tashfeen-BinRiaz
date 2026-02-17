@@ -1,0 +1,1021 @@
+{% comment %}
+  Section: Gift Guide Product Grid
+  ==================================
+  A 3×2 responsive product grid ("Tisso vison in the wild") with:
+  - 6 product blocks, each with a product picker in the customizer
+  - "+" circle hotspots on each image that open a product popup
+  - Popup is a small floating card (not full-screen) with:
+    - Product image on the left, info on the right
+    - Color: bordered rectangles with colored left-edge indicator
+    - Size: dropdown select ("Choose your size")
+    - Functional "ADD TO CART" button with arrow animation
+  - Special rule: Black + Medium variant → auto-adds "Soft Winter Jacket"
+
+  No jQuery — 100% vanilla JavaScript.
+  All code built from scratch (no Dawn section dependencies).
+{% endcomment %}
+
+<section
+  class="gift-grid"
+  data-section-id="{{ section.id }}"
+  data-section-type="gift-guide-grid"
+>
+  {%- comment -%} Section heading — editable from customizer {%- endcomment -%}
+  {%- if section.settings.heading != blank -%}
+    <h2 class="gift-grid__heading">{{ section.settings.heading }}</h2>
+  {%- endif -%}
+
+  {%- comment -%} 3×2 product image grid {%- endcomment -%}
+  <div class="gift-grid__grid">
+    {%- for block in section.blocks -%}
+      {%- assign product = block.settings.product -%}
+
+      <div class="gift-grid__item" {{ block.shopify_attributes }}>
+        <div class="gift-grid__image-wrapper">
+          {%- comment -%} Product featured image {%- endcomment -%}
+          {%- if product != blank and product.featured_image != blank -%}
+            {{
+              product.featured_image
+              | image_url: width: 800
+              | image_tag:
+                widths: '300, 400, 600, 800',
+                class: 'gift-grid__image',
+                sizes: '(min-width: 750px) 33vw, 50vw',
+                loading: 'lazy',
+                alt: product.title
+            }}
+          {%- else -%}
+            {%- comment -%} Placeholder when no product is selected {%- endcomment -%}
+            {{ 'product-apparel-1' | placeholder_svg_tag: 'gift-grid__image gift-grid__placeholder' }}
+          {%- endif -%}
+
+          {%- comment -%}
+            "+" circle hotspot button.
+            On click, opens the popup for this product.
+            The "+" icon matches the Figma design exactly.
+          {%- endcomment -%}
+          {%- if product != blank -%}
+            <button
+              class="gift-grid__hotspot"
+              type="button"
+              aria-label="View {{ product.title }} details"
+              data-product-handle="{{ product.handle }}"
+              data-product-id="{{ product.id }}"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M7 1V13M1 7H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+          {%- endif -%}
+        </div>
+      </div>
+    {%- endfor -%}
+  </div>
+
+  {%- comment -%}
+    =====================================================
+    PRODUCT POPUP
+    Small floating card that appears over the grid.
+    Layout: image on left, product info on right.
+    Close via × button, overlay click, or Escape key.
+    =====================================================
+  {%- endcomment -%}
+  <div class="gift-popup__overlay" id="gift-popup-overlay" aria-hidden="true">
+    <div class="gift-popup" role="dialog" aria-modal="true" aria-labelledby="gift-popup-title">
+      {%- comment -%} Close button (×) {%- endcomment -%}
+      <button class="gift-popup__close" type="button" aria-label="Close popup">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M12 4L4 12M4 4L12 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+
+      <div class="gift-popup__body">
+        {%- comment -%} Left: product image {%- endcomment -%}
+        <div class="gift-popup__image-col">
+          <img class="gift-popup__image" id="gift-popup-image" src="" alt="" />
+        </div>
+
+        {%- comment -%} Right: product info + variants + Add to Cart {%- endcomment -%}
+        <div class="gift-popup__info-col">
+          <h3 class="gift-popup__title" id="gift-popup-title"></h3>
+          <p class="gift-popup__price" id="gift-popup-price"></p>
+          <p class="gift-popup__description" id="gift-popup-description"></p>
+
+          {%- comment -%} Variant selectors — built dynamically by JS {%- endcomment -%}
+          <div class="gift-popup__variants" id="gift-popup-variants"></div>
+
+          {%- comment -%} Add to Cart button with arrow {%- endcomment -%}
+          <button
+            class="gift-popup__add-to-cart"
+            id="gift-popup-add-to-cart"
+            type="button"
+          >
+            <span>ADD TO CART</span>
+            <span class="gift-popup__cart-arrow">
+              <svg width="20" height="12" viewBox="0 0 20 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M14 1L19 6M19 6L14 11M19 6H1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+          </button>
+
+          {%- comment -%} Status message (success / error feedback) {%- endcomment -%}
+          <p class="gift-popup__status" id="gift-popup-status"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+{%- comment -%}
+  =====================================================
+  INLINE PRODUCT DATA (JSON)
+  Pre-renders each block product's data so the popup
+  can display variants instantly without extra API calls.
+  =====================================================
+{%- endcomment -%}
+<script type="application/json" id="gift-grid-products-data">
+  {
+    {%- assign is_first_product = true -%}
+    {%- for block in section.blocks -%}
+      {%- assign product = block.settings.product -%}
+      {%- if product != blank -%}
+        {%- unless is_first_product -%},{%- endunless -%}
+        "{{ product.handle }}": {
+          "id": {{ product.id }},
+          "title": {{ product.title | json }},
+          "handle": {{ product.handle | json }},
+          "description": {{ product.description | strip_html | truncate: 200 | json }},
+          "price": {{ product.price | json }},
+          "price_formatted": {{ product.price | money | json }},
+          "image": {{ product.featured_image | image_url: width: 600 | json }},
+          "image_alt": {{ product.featured_image.alt | default: product.title | json }},
+          "options": {{ product.options_with_values | json }},
+          "variants": [
+            {%- for variant in product.variants -%}
+              {
+                "id": {{ variant.id }},
+                "title": {{ variant.title | json }},
+                "price": {{ variant.price | json }},
+                "price_formatted": {{ variant.price | money | json }},
+                "available": {{ variant.available | json }},
+                "options": {{ variant.options | json }}
+              }{%- unless forloop.last -%},{%- endunless -%}
+            {%- endfor -%}
+          ]
+        }
+        {%- assign is_first_product = false -%}
+      {%- endif -%}
+    {%- endfor -%}
+  }
+</script>
+
+{%- comment -%}
+  =====================================================
+  VANILLA JAVASCRIPT — No jQuery
+  Handles:
+  1. Popup open/close
+  2. Dynamic variant rendering (Color as swatches, Size as dropdown)
+  3. Add to Cart via Shopify Cart API (POST /cart/add.js)
+  4. "Black + Medium" → auto-add "Soft Winter Jacket" rule
+  =====================================================
+{%- endcomment -%}
+<script>
+  (function() {
+    'use strict';
+
+    /* ============================================================
+       DOM REFERENCES
+       ============================================================ */
+    var overlay      = document.getElementById('gift-popup-overlay');
+    var popupImage   = document.getElementById('gift-popup-image');
+    var popupTitle   = document.getElementById('gift-popup-title');
+    var popupPrice   = document.getElementById('gift-popup-price');
+    var popupDesc    = document.getElementById('gift-popup-description');
+    var popupVars    = document.getElementById('gift-popup-variants');
+    var addToCartBtn = document.getElementById('gift-popup-add-to-cart');
+    var statusEl     = document.getElementById('gift-popup-status');
+    var closeBtn     = overlay.querySelector('.gift-popup__close');
+
+    /* ============================================================
+       PARSE PRODUCT DATA from inline JSON
+       ============================================================ */
+    var productsData = {};
+    try {
+      productsData = JSON.parse(
+        document.getElementById('gift-grid-products-data').textContent
+      );
+    } catch (e) {
+      console.error('Gift Grid: Failed to parse product data', e);
+    }
+
+    /* ============================================================
+       STATE
+       ============================================================ */
+    var currentProduct  = null;   /* Currently displayed product object */
+    var selectedOptions = {};     /* e.g. { "Color": "Blue", "Size": "Medium" } */
+
+    /* ============================================================
+       OPEN POPUP
+       Called when a "+" hotspot button is clicked.
+       Populates the popup card with the product's data.
+       ============================================================ */
+    function openPopup(handle) {
+      var product = productsData[handle];
+      if (!product) return;
+
+      currentProduct  = product;
+      selectedOptions = {};
+      statusEl.textContent = '';
+      statusEl.className = 'gift-popup__status';
+
+      /* Set basic product info */
+      popupImage.src = product.image;
+      popupImage.alt = product.image_alt;
+      popupTitle.textContent = product.title;
+      popupPrice.textContent = product.price_formatted;
+      popupDesc.textContent  = product.description;
+
+      /* Build variant selectors from product options */
+      renderVariants(product);
+
+      /* Show the popup overlay */
+      overlay.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+    }
+
+    /* ============================================================
+       CLOSE POPUP
+       ============================================================ */
+    function closePopup() {
+      overlay.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+      currentProduct  = null;
+      selectedOptions = {};
+    }
+
+    /* ============================================================
+       RENDER VARIANTS
+       Dynamically builds UI for each product option:
+       - "Color" type → bordered rectangles with color left-edge
+       - Other types (Size, etc.) → dropdown <select>
+       This matches the exact Figma popup design.
+       ============================================================ */
+    function renderVariants(product) {
+      popupVars.innerHTML = '';
+      if (!product.options || product.options.length === 0) return;
+
+      product.options.forEach(function(option, optIndex) {
+        /* Wrapper for each option group */
+        var group = document.createElement('div');
+        group.className = 'gift-popup__option-group';
+
+        /* Option label (e.g. "Color", "Size") */
+        var label = document.createElement('span');
+        label.className = 'gift-popup__option-label';
+        label.textContent = option.name;
+        group.appendChild(label);
+
+        /* Determine if this option looks like a "Color" option */
+        var isColor = option.name.toLowerCase() === 'color' ||
+                      option.name.toLowerCase() === 'colour';
+
+        if (isColor) {
+          /* ---- COLOR: Bordered rectangles with colored left-edge ---- */
+          var swatchWrap = document.createElement('div');
+          swatchWrap.className = 'gift-popup__color-swatches';
+
+          option.values.forEach(function(value, idx) {
+            var swatch = document.createElement('button');
+            swatch.type = 'button';
+            swatch.className = 'gift-popup__color-swatch';
+            swatch.setAttribute('data-option', option.name);
+            swatch.setAttribute('data-value', value);
+            swatch.setAttribute('aria-label', value);
+
+            /* Left color indicator bar */
+            var indicator = document.createElement('span');
+            indicator.className = 'gift-popup__color-indicator';
+            indicator.style.backgroundColor = getColorHex(value);
+
+            /* Color name text */
+            var text = document.createElement('span');
+            text.className = 'gift-popup__color-name';
+            text.textContent = value;
+
+            swatch.appendChild(indicator);
+            swatch.appendChild(text);
+
+            /* Pre-select first value */
+            if (idx === 0) {
+              swatch.classList.add('gift-popup__color-swatch--active');
+              selectedOptions[option.name] = value;
+            }
+
+            /* Click handler — select this color */
+            swatch.addEventListener('click', function() {
+              /* Remove active from siblings */
+              swatchWrap.querySelectorAll('.gift-popup__color-swatch').forEach(function(s) {
+                s.classList.remove('gift-popup__color-swatch--active');
+              });
+              swatch.classList.add('gift-popup__color-swatch--active');
+              selectedOptions[option.name] = value;
+              updatePrice();
+            });
+
+            swatchWrap.appendChild(swatch);
+          });
+
+          group.appendChild(swatchWrap);
+
+        } else {
+          /* ---- SIZE / OTHER: Dropdown select ---- */
+          var selectWrap = document.createElement('div');
+          selectWrap.className = 'gift-popup__select-wrap';
+
+          var select = document.createElement('select');
+          select.className = 'gift-popup__select';
+          select.setAttribute('aria-label', option.name);
+
+          /* Placeholder option */
+          var placeholder = document.createElement('option');
+          placeholder.value = '';
+          placeholder.textContent = 'Choose your ' + option.name.toLowerCase();
+          placeholder.disabled = true;
+          placeholder.selected = true;
+          select.appendChild(placeholder);
+
+          option.values.forEach(function(value) {
+            var opt = document.createElement('option');
+            opt.value = value;
+            opt.textContent = value;
+            select.appendChild(opt);
+          });
+
+          /* On change — update selected options */
+          select.addEventListener('change', function() {
+            selectedOptions[option.name] = select.value;
+            updatePrice();
+          });
+
+          /* Chevron icon for the dropdown */
+          var chevron = document.createElement('span');
+          chevron.className = 'gift-popup__select-chevron';
+          chevron.innerHTML = '<svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+          selectWrap.appendChild(select);
+          selectWrap.appendChild(chevron);
+          group.appendChild(selectWrap);
+        }
+
+        popupVars.appendChild(group);
+      });
+    }
+
+    /* ============================================================
+       GET COLOR HEX
+       Maps common color names to hex values for the indicator bar.
+       Falls back to a neutral gray for unknown colors.
+       ============================================================ */
+    function getColorHex(colorName) {
+      var colors = {
+        'black':  '#000000',
+        'blue':   '#0000CC',
+        'red':    '#CC0000',
+        'green':  '#008800',
+        'white':  '#FFFFFF',
+        'yellow': '#E8E231',
+        'pink':   '#FF69B4',
+        'brown':  '#8B4513',
+        'gray':   '#808080',
+        'grey':   '#808080',
+        'navy':   '#000080',
+        'beige':  '#F5F5DC',
+        'orange': '#FF8C00',
+        'purple': '#800080'
+      };
+      return colors[colorName.toLowerCase()] || '#CCCCCC';
+    }
+
+    /* ============================================================
+       UPDATE PRICE
+       When variant selection changes, find the matching variant
+       and update the displayed price.
+       ============================================================ */
+    function updatePrice() {
+      if (!currentProduct) return;
+      var matched = findSelectedVariant();
+      if (matched) {
+        popupPrice.textContent = matched.price_formatted;
+      }
+    }
+
+    /* ============================================================
+       FIND SELECTED VARIANT
+       Matches user-selected options against available variants.
+       Returns the matching variant object, or null.
+       ============================================================ */
+    function findSelectedVariant() {
+      if (!currentProduct || !currentProduct.variants) return null;
+
+      return currentProduct.variants.find(function(variant) {
+        return variant.options.every(function(optVal, idx) {
+          var optName = currentProduct.options[idx].name;
+          return selectedOptions[optName] === optVal;
+        });
+      });
+    }
+
+    /* ============================================================
+       ADD TO CART
+       Uses the Shopify Cart API (POST /cart/add.js).
+       Implements the special business rule:
+       → If the selected variant has "Black" color AND "Medium" size,
+         automatically also add "Soft Winter Jacket" to the cart.
+       ============================================================ */
+    function addToCart() {
+      if (!currentProduct) return;
+
+      var variant = findSelectedVariant();
+
+      /* Validate all options are selected */
+      if (!variant) {
+        statusEl.textContent = 'Please select all options.';
+        statusEl.className = 'gift-popup__status gift-popup__status--error';
+        return;
+      }
+
+      /* Check availability */
+      if (!variant.available) {
+        statusEl.textContent = 'This variant is currently sold out.';
+        statusEl.className = 'gift-popup__status gift-popup__status--error';
+        return;
+      }
+
+      /* Disable button while processing */
+      addToCartBtn.disabled = true;
+      addToCartBtn.querySelector('span').textContent = 'ADDING...';
+      statusEl.textContent = '';
+
+      /* Build items payload */
+      var items = [{ id: variant.id, quantity: 1 }];
+
+      /* ---- SPECIAL RULE ----
+         Check if selected variant has both "Black" and "Medium" options.
+         If so, find and auto-add "Soft Winter Jacket". */
+      var hasBlack  = variant.options.some(function(o) {
+        return o.toLowerCase() === 'black';
+      });
+      var hasMedium = variant.options.some(function(o) {
+        return o.toLowerCase() === 'medium';
+      });
+      var triggerJacketRule = hasBlack && hasMedium;
+
+      if (triggerJacketRule) {
+        var jacketId = findSoftWinterJacketVariant();
+        if (jacketId) {
+          items.push({ id: jacketId, quantity: 1 });
+        }
+      }
+
+      /* POST to Shopify Cart API */
+      fetch('/cart/add.js', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: items })
+      })
+      .then(function(response) {
+        if (!response.ok) throw new Error('Failed to add to cart');
+        return response.json();
+      })
+      .then(function() {
+        var msg = 'Added to cart!';
+        if (triggerJacketRule) {
+          msg += ' Soft Winter Jacket was also added.';
+        }
+        statusEl.textContent = msg;
+        statusEl.className = 'gift-popup__status gift-popup__status--success';
+        addToCartBtn.disabled = false;
+        addToCartBtn.querySelector('span').textContent = 'ADD TO CART';
+      })
+      .catch(function(err) {
+        console.error('Cart error:', err);
+        statusEl.textContent = 'Could not add to cart. Please try again.';
+        statusEl.className = 'gift-popup__status gift-popup__status--error';
+        addToCartBtn.disabled = false;
+        addToCartBtn.querySelector('span').textContent = 'ADD TO CART';
+      });
+    }
+
+    /* ============================================================
+       FIND SOFT WINTER JACKET VARIANT
+       First checks the preloaded grid products for a matching title.
+       If not found, fetches by handle as an async fallback.
+       Returns the variant ID or null.
+       ============================================================ */
+    function findSoftWinterJacketVariant() {
+      /* Search preloaded products */
+      for (var handle in productsData) {
+        var p = productsData[handle];
+        if (p.title.toLowerCase() === 'soft winter jacket') {
+          var available = p.variants.find(function(v) { return v.available; });
+          return available ? available.id : p.variants[0].id;
+        }
+      }
+
+      /* Async fallback: fetch product by handle and add separately */
+      fetch('/products/soft-winter-jacket.js')
+        .then(function(res) { return res.json(); })
+        .then(function(jacket) {
+          if (jacket && jacket.variants && jacket.variants.length > 0) {
+            var v = jacket.variants.find(function(v) { return v.available; });
+            var id = v ? v.id : jacket.variants[0].id;
+            return fetch('/cart/add.js', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ items: [{ id: id, quantity: 1 }] })
+            });
+          }
+        })
+        .catch(function(err) {
+          console.warn('Could not auto-add Soft Winter Jacket:', err);
+        });
+
+      return null;
+    }
+
+    /* ============================================================
+       EVENT LISTENERS
+       ============================================================ */
+
+    /* "+" hotspot clicks → open popup */
+    document.querySelectorAll('.gift-grid__hotspot').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var handle = this.getAttribute('data-product-handle');
+        openPopup(handle);
+      });
+    });
+
+    /* Close button click */
+    closeBtn.addEventListener('click', closePopup);
+
+    /* Click on dark overlay → close */
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) closePopup();
+    });
+
+    /* Escape key → close */
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && overlay.getAttribute('aria-hidden') === 'false') {
+        closePopup();
+      }
+    });
+
+    /* Add to Cart button click */
+    addToCartBtn.addEventListener('click', addToCart);
+
+  })();
+</script>
+
+{% stylesheet %}
+  /* ============================================================
+     GIFT GUIDE PRODUCT GRID — Styles
+     Built from scratch, no Dawn dependencies.
+     Pixel-perfect match to Figma design.
+     ============================================================ */
+
+  .gift-grid {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 48px 40px;
+    background-color: #f5f5f5;
+  }
+
+  .gift-grid__heading {
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-size: clamp(1.5rem, 3vw, 1.875rem);
+    font-weight: 400;
+    margin: 0 0 24px 0;
+    color: #000;
+  }
+
+  /* ------- 3×2 GRID LAYOUT ------- */
+  .gift-grid__grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .gift-grid__item {
+    position: relative;
+  }
+
+  .gift-grid__image-wrapper {
+    position: relative;
+    overflow: hidden;
+    aspect-ratio: 4 / 5;
+  }
+
+  .gift-grid__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center top;
+    transition: transform 0.4s ease;
+  }
+
+  .gift-grid__item:hover .gift-grid__image {
+    transform: scale(1.02);
+  }
+
+  .gift-grid__placeholder {
+    background-color: #e8e8e8;
+  }
+
+  /* ------- "+" HOTSPOT CIRCLE ------- */
+  .gift-grid__hotspot {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    background: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    z-index: 2;
+    color: #000;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  .gift-grid__hotspot svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .gift-grid__hotspot:hover {
+    transform: scale(1.15);
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.25);
+  }
+
+  /* ------- POPUP OVERLAY ------- */
+  .gift-popup__overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+  }
+
+  .gift-popup__overlay[aria-hidden="true"] {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .gift-popup__overlay[aria-hidden="false"] {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* ------- POPUP CARD ------- */
+  .gift-popup {
+    background: #fff;
+    max-width: 560px;
+    width: 100%;
+    position: relative;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+  }
+
+  .gift-popup__close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #000;
+    z-index: 3;
+    padding: 4px;
+    line-height: 1;
+    transition: opacity 0.2s ease;
+  }
+
+  .gift-popup__close:hover {
+    opacity: 0.5;
+  }
+
+  /* Popup body: image left, info right */
+  .gift-popup__body {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+  }
+
+  .gift-popup__image-col {
+    background-color: #f5f5f5;
+  }
+
+  .gift-popup__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    min-height: 280px;
+  }
+
+  .gift-popup__info-col {
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .gift-popup__title {
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-size: 1rem;
+    font-weight: 400;
+    margin: 0;
+    color: #000;
+  }
+
+  .gift-popup__price {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    margin: 0;
+    color: #000;
+  }
+
+  .gift-popup__description {
+    font-size: 0.75rem;
+    line-height: 1.6;
+    color: #555;
+    margin: 0 0 4px;
+  }
+
+  /* ------- VARIANT: COLOR SWATCHES ------- */
+  .gift-popup__option-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+
+  .gift-popup__option-label {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: #000;
+  }
+
+  .gift-popup__color-swatches {
+    display: flex;
+    gap: 0;
+  }
+
+  /* Color swatch: bordered rectangle with colored left indicator */
+  .gift-popup__color-swatch {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 0;
+    border: 1px solid #ccc;
+    background: #fff;
+    cursor: pointer;
+    min-width: 90px;
+    height: 36px;
+    transition: border-color 0.2s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Remove double borders between adjacent swatches */
+  .gift-popup__color-swatch + .gift-popup__color-swatch {
+    margin-left: -1px;
+  }
+
+  .gift-popup__color-swatch--active {
+    border-color: #000;
+    z-index: 1;
+  }
+
+  /* Left colored indicator bar */
+  .gift-popup__color-indicator {
+    width: 4px;
+    height: 100%;
+    flex-shrink: 0;
+  }
+
+  .gift-popup__color-name {
+    flex: 1;
+    text-align: center;
+    font-size: 0.8125rem;
+    color: #000;
+    padding: 0 12px;
+  }
+
+  /* ------- VARIANT: SIZE DROPDOWN ------- */
+  .gift-popup__select-wrap {
+    position: relative;
+    width: 100%;
+  }
+
+  .gift-popup__select {
+    width: 100%;
+    padding: 10px 36px 10px 12px;
+    font-size: 0.8125rem;
+    border: 1px solid #ccc;
+    background: #fff;
+    color: #000;
+    appearance: none;
+    cursor: pointer;
+    border-radius: 0;
+  }
+
+  .gift-popup__select:focus {
+    outline: none;
+    border-color: #000;
+  }
+
+  .gift-popup__select-chevron {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: #000;
+    line-height: 1;
+  }
+
+  .gift-popup__select-chevron svg {
+    width: 12px;
+    height: 8px;
+  }
+
+  /* ------- ADD TO CART BUTTON ------- */
+  .gift-popup__add-to-cart {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    padding: 14px 24px;
+    background-color: #000;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border: none;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: background-color 0.3s ease;
+  }
+
+  .gift-popup__cart-arrow {
+    display: inline-flex;
+    align-items: center;
+    transition: transform 0.3s ease;
+  }
+
+  .gift-popup__cart-arrow svg {
+    width: 20px;
+    height: 12px;
+  }
+
+  .gift-popup__add-to-cart:hover .gift-popup__cart-arrow {
+    transform: translateX(5px);
+  }
+
+  .gift-popup__add-to-cart:hover {
+    background-color: #222;
+  }
+
+  .gift-popup__add-to-cart:disabled {
+    background-color: #999;
+    cursor: not-allowed;
+  }
+
+  /* ------- STATUS MESSAGES ------- */
+  .gift-popup__status {
+    font-size: 0.6875rem;
+    margin: 0;
+    min-height: 1em;
+  }
+
+  .gift-popup__status--success {
+    color: #2e7d32;
+  }
+
+  .gift-popup__status--error {
+    color: #c62828;
+  }
+
+  /* ===========================================================
+     MOBILE RESPONSIVE (<750px)
+     - Grid becomes 2 columns
+     - Heading centered
+     - Popup stacks vertically (image on top, info below)
+     =========================================================== */
+  @media screen and (max-width: 749px) {
+    .gift-grid {
+      padding: 36px 16px;
+    }
+
+    .gift-grid__heading {
+      font-size: 1.375rem;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+
+    .gift-grid__grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 4px;
+    }
+
+    .gift-grid__hotspot {
+      bottom: 12px;
+      right: 12px;
+      width: 26px;
+      height: 26px;
+    }
+
+    .gift-grid__hotspot svg {
+      width: 10px;
+      height: 10px;
+    }
+
+    /* Popup stacks vertically on mobile */
+    .gift-popup {
+      max-width: 340px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .gift-popup__body {
+      grid-template-columns: 1fr;
+    }
+
+    .gift-popup__image-col {
+      max-height: 200px;
+      overflow: hidden;
+    }
+
+    .gift-popup__image {
+      min-height: auto;
+    }
+
+    .gift-popup__info-col {
+      padding: 16px;
+    }
+  }
+{% endstylesheet %}
+
+{% schema %}
+{
+  "name": "Gift Guide Grid",
+  "tag": "div",
+  "class": "gift-guide-grid-section",
+  "max_blocks": 6,
+  "settings": [
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Section heading",
+      "default": "Tisso vison in the wild"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "product_block",
+      "name": "Product",
+      "settings": [
+        {
+          "type": "product",
+          "id": "product",
+          "label": "Product"
+        }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Gift Guide Grid",
+      "blocks": [
+        { "type": "product_block" },
+        { "type": "product_block" },
+        { "type": "product_block" },
+        { "type": "product_block" },
+        { "type": "product_block" },
+        { "type": "product_block" }
+      ]
+    }
+  ]
+}
+{% endschema %}
