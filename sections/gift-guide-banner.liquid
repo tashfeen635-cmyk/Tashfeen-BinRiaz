@@ -1,32 +1,53 @@
 {% comment %}
   Section: Gift Guide Banner
   ===========================
-  A full-width banner section consisting of three visual parts:
-  1. Top bar — brand name, promotional message, and yellow CTA button
-  2. Hero area — illustrated background image with heading, description, and
-     black "SHOP NOW" button (text sits bottom-left on desktop, above image on mobile)
-  3. Bottom strip — sustainability / tagline text on a light gray bar
-
-  All visible text is editable from the Shopify theme customizer.
-  Buttons include hover animations (arrow slide effect).
-  No jQuery — vanilla CSS animations only.
+  Desktop: CSS background-image covers the full section.
+           Top bar + text content overlay on the illustration.
+  Mobile:  Heading + description on white above the illustration.
+           Illustration shown as a contained image block.
+           SHOP NOW button overlaid centered on the illustration.
 {% endcomment %}
+
+{%- comment -%} Resolve the background image URL {%- endcomment -%}
+{%- if section.settings.hero_image != blank -%}
+  {%- assign hero_img = section.settings.hero_image -%}
+  {%- assign hero_bg_url = hero_img | image_url: width: 3840 -%}
+{%- else -%}
+  {%- assign hero_bg_url = 'example.png' | asset_url -%}
+{%- endif -%}
+
+{%- comment -%} Resolve the mobile hero image URL {%- endcomment -%}
+{%- if section.settings.mobile_hero_image != blank -%}
+  {%- assign mobile_hero_url = section.settings.mobile_hero_image | image_url: width: 1200 -%}
+{%- else -%}
+  {%- assign mobile_hero_url = 'mobile-hero.png' | asset_url -%}
+{%- endif -%}
 
 <section
   class="gift-banner"
   data-section-id="{{ section.id }}"
   data-section-type="gift-guide-banner"
+  style="--desktop-hero-bg: url('{{ hero_bg_url }}'); --mobile-hero-bg: url('{{ mobile_hero_url }}');"
 >
   {%- comment -%} === TOP BAR === {%- endcomment -%}
-  <div class="gift-banner__topbar">
+  <div class="gift-banner__topbar" id="gift-topbar">
     <div class="gift-banner__topbar-inner">
-      {%- comment -%} Brand name — editable from customizer {%- endcomment -%}
+      {%- comment -%} Hamburger: visible on mobile closed state {%- endcomment -%}
+      <button class="gift-banner__hamburger" id="gift-hamburger" aria-label="Open menu">
+        <svg width="24" height="16" viewBox="0 0 24 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <line x1="0" y1="1" x2="24" y2="1" stroke="#000" stroke-width="2"/>
+          <line x1="0" y1="8" x2="24" y2="8" stroke="#000" stroke-width="2"/>
+          <line x1="0" y1="15" x2="24" y2="15" stroke="#000" stroke-width="2"/>
+        </svg>
+      </button>
+      {%- comment -%} Close X: visible on mobile open state {%- endcomment -%}
+      <button class="gift-banner__close" id="gift-close" aria-label="Close menu">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M2 2L18 18M18 2L2 18" stroke="#000" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
       <span class="gift-banner__brand">{{ section.settings.brand_name }}</span>
-
-      {%- comment -%} Promo message — editable from customizer {%- endcomment -%}
       <p class="gift-banner__message">{{ section.settings.promo_message }}</p>
-
-      {%- comment -%} CTA button with arrow slide animation on hover {%- endcomment -%}
       <a
         href="{{ section.settings.cta_link }}"
         class="gift-banner__cta-btn"
@@ -40,67 +61,77 @@
         </span>
       </a>
     </div>
+    {%- comment -%} Mobile drawer panel {%- endcomment -%}
+    <div class="gift-banner__drawer" id="gift-drawer">
+      <p class="gift-banner__drawer-message">{{ section.settings.promo_message }}</p>
+      <a
+        href="{{ section.settings.cta_link }}"
+        class="gift-banner__cta-btn gift-banner__drawer-cta"
+        {% if section.settings.cta_link == blank %}role="button" aria-disabled="true"{% endif %}
+      >
+        <span class="gift-banner__cta-label">{{ section.settings.cta_label }}</span>
+        <span class="gift-banner__cta-arrow">
+          <svg width="18" height="12" viewBox="0 0 18 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M12 1L17 6M17 6L12 11M17 6H1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+      </a>
+    </div>
   </div>
 
-  {%- comment -%} === HERO AREA === {%- endcomment -%}
+  <script>
+    (function() {
+      var hamburger = document.getElementById('gift-hamburger');
+      var closeBtn = document.getElementById('gift-close');
+      var topbar = document.getElementById('gift-topbar');
+      if (hamburger && closeBtn && topbar) {
+        hamburger.addEventListener('click', function() {
+          topbar.classList.add('gift-banner__topbar--open');
+        });
+        closeBtn.addEventListener('click', function() {
+          topbar.classList.remove('gift-banner__topbar--open');
+        });
+      }
+    })();
+  </script>
+
+  {%- comment -%} === MOBILE: text above image (hidden on desktop) === {%- endcomment -%}
+  <div class="gift-banner__mobile-text">
+    {%- if section.settings.heading != blank -%}
+      <h1 class="gift-banner__heading">{{ section.settings.heading }}</h1>
+    {%- endif -%}
+    {%- if section.settings.description != blank -%}
+      <div class="gift-banner__description">{{ section.settings.description }}</div>
+    {%- endif -%}
+  </div>
+
+  {%- comment -%} === MOBILE: illustration image block with SHOP NOW overlay (hidden on desktop) === {%- endcomment -%}
+  <div class="gift-banner__mobile-media">
+    <img
+      src="{{ mobile_hero_url }}"
+      alt="{{ section.settings.heading }}"
+      class="gift-banner__mobile-img"
+      loading="eager"
+      fetchpriority="high"
+    />
+    {%- if section.settings.shop_label != blank -%}
+      <a
+        href="{{ section.settings.shop_link }}"
+        class="gift-banner__shop-btn gift-banner__shop-btn--mobile"
+        {% if section.settings.shop_link == blank %}role="button" aria-disabled="true"{% endif %}
+      >
+        <span class="gift-banner__shop-label">{{ section.settings.shop_label }}</span>
+        <span class="gift-banner__shop-arrow">
+          <svg width="20" height="12" viewBox="0 0 20 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M14 1L19 6M19 6L14 11M19 6H1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+      </a>
+    {%- endif -%}
+  </div>
+
+  {%- comment -%} === DESKTOP: hero content bottom-left (hidden on mobile) === {%- endcomment -%}
   <div class="gift-banner__hero">
-    {%- comment -%}
-      Mobile-only: heading + description appear ABOVE the image.
-      These elements are duplicated and shown/hidden via CSS
-      to match the Figma mobile layout without JavaScript.
-    {%- endcomment -%}
-    <div class="gift-banner__mobile-text">
-      {%- if section.settings.heading != blank -%}
-        <h1 class="gift-banner__heading">{{ section.settings.heading }}</h1>
-      {%- endif -%}
-      {%- if section.settings.description != blank -%}
-        <div class="gift-banner__description">{{ section.settings.description }}</div>
-      {%- endif -%}
-    </div>
-
-    {%- comment -%} Background image — uploadable from customizer {%- endcomment -%}
-    <div class="gift-banner__hero-media">
-      {%- if section.settings.hero_image != blank -%}
-        {{
-          section.settings.hero_image
-          | image_url: width: 3840
-          | image_tag:
-            widths: '600, 900, 1200, 1600, 1920, 2560, 3840',
-            class: 'gift-banner__hero-img',
-            sizes: '100vw',
-            loading: 'eager',
-            fetchpriority: 'high',
-            alt: section.settings.heading
-        }}
-      {%- else -%}
-        {%- comment -%} Placeholder SVG when no image is set {%- endcomment -%}
-        {{ 'lifestyle-1' | placeholder_svg_tag: 'gift-banner__hero-img gift-banner__hero-placeholder' }}
-      {%- endif -%}
-
-      {%- comment -%}
-        Mobile-only: SHOP NOW button overlaid on the image (centered bottom).
-        Hidden on desktop via CSS.
-      {%- endcomment -%}
-      {%- if section.settings.shop_label != blank -%}
-        <a
-          href="{{ section.settings.shop_link }}"
-          class="gift-banner__shop-btn gift-banner__shop-btn--mobile"
-          {% if section.settings.shop_link == blank %}role="button" aria-disabled="true"{% endif %}
-        >
-          <span class="gift-banner__shop-label">{{ section.settings.shop_label }}</span>
-          <span class="gift-banner__shop-arrow">
-            <svg width="20" height="12" viewBox="0 0 20 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M14 1L19 6M19 6L14 11M19 6H1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </span>
-        </a>
-      {%- endif -%}
-    </div>
-
-    {%- comment -%}
-      Desktop-only: heading + description + SHOP NOW button
-      positioned bottom-left over the background image.
-    {%- endcomment -%}
     <div class="gift-banner__hero-content">
       {%- if section.settings.heading != blank -%}
         <h1 class="gift-banner__heading">{{ section.settings.heading }}</h1>
@@ -110,11 +141,10 @@
         <div class="gift-banner__description">{{ section.settings.description }}</div>
       {%- endif -%}
 
-      {%- comment -%} Shop button with arrow slide animation {%- endcomment -%}
       {%- if section.settings.shop_label != blank -%}
         <a
           href="{{ section.settings.shop_link }}"
-          class="gift-banner__shop-btn gift-banner__shop-btn--desktop"
+          class="gift-banner__shop-btn"
           {% if section.settings.shop_link == blank %}role="button" aria-disabled="true"{% endif %}
         >
           <span class="gift-banner__shop-label">{{ section.settings.shop_label }}</span>
@@ -138,25 +168,31 @@
 
 {% stylesheet %}
   /* ============================================================
-     GIFT GUIDE BANNER — Styles
-     Built from scratch, no Dawn dependencies.
-     Pixel-perfect match to Figma design.
+     GIFT GUIDE BANNER
+     Desktop: background-image covers full section
+     Mobile:  text above, image as block, button overlaid
      ============================================================ */
 
+  /* ------- MAIN WRAPPER ------- */
   .gift-banner {
     width: 100%;
     background-color: #f5f5f5;
+    background-image: var(--desktop-hero-bg);
+    background-size: contain;
+    background-position: center center;
+    background-repeat: no-repeat;
+    display: flex;
+    flex-direction: column;
   }
 
-  /* ------- TOP BAR ------- */
+  /* ------- TOP BAR (desktop only) ------- */
   .gift-banner__topbar {
-    background-color: #fff;
-    padding: 14px 0;
+    padding: 10px 0;
+    background: #f5f5f5;
+    border-bottom: 1px solid #e0e0e0;
   }
 
   .gift-banner__topbar-inner {
-    max-width: 1400px;
-    margin: 0 auto;
     padding: 0 40px;
     display: flex;
     align-items: center;
@@ -164,10 +200,34 @@
     gap: 20px;
   }
 
+  /* Hamburger & Close — hidden on desktop, shown on mobile */
+  .gift-banner__hamburger {
+    display: none;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    line-height: 0;
+  }
+
+  .gift-banner__close {
+    display: none;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    line-height: 0;
+  }
+
+  /* Mobile drawer panel — hidden on desktop */
+  .gift-banner__drawer {
+    display: none;
+  }
+
   .gift-banner__brand {
-    font-family: inherit;
+    font-family: 'Jost', sans-serif;
     font-weight: 700;
-    font-size: 0.9375rem;
+    font-size: 0.875rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     white-space: nowrap;
@@ -176,13 +236,14 @@
 
   .gift-banner__message {
     margin: 0;
-    font-size: 0.8125rem;
+    font-family: 'Jost', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 400;
     color: #333;
     text-align: center;
     flex: 1;
   }
 
-  /* CTA Button — yellow (#E8E231) with arrow slide animation */
   .gift-banner__cta-btn {
     display: inline-flex;
     align-items: center;
@@ -190,6 +251,7 @@
     padding: 10px 24px;
     background-color: #E8E231;
     color: #000;
+    font-family: 'Jost', sans-serif;
     font-size: 0.6875rem;
     font-weight: 600;
     letter-spacing: 0.1em;
@@ -212,7 +274,6 @@
     height: 12px;
   }
 
-  /* Arrow slides right on hover */
   .gift-banner__cta-btn:hover .gift-banner__cta-arrow {
     transform: translateX(5px);
   }
@@ -221,86 +282,75 @@
     background-color: #d4cc2b;
   }
 
-  /* ------- HERO AREA ------- */
-  .gift-banner__hero {
-    position: relative;
-  }
-
-  /* Mobile text block: hidden on desktop */
+  /* ------- MOBILE ELEMENTS (hidden on desktop) ------- */
   .gift-banner__mobile-text {
     display: none;
   }
 
-  .gift-banner__hero-media {
-    position: relative;
-    width: 100%;
-    min-height: 560px;
+  .gift-banner__mobile-media {
+    display: none;
   }
 
-  .gift-banner__hero-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: center;
-    position: absolute;
-    inset: 0;
+  /* ------- DESKTOP HERO AREA ------- */
+  .gift-banner__hero {
+    flex: 1;
+    min-height: 52vw;
+    display: flex;
+    align-items: flex-end;
+    box-sizing: content-box;
   }
 
-  .gift-banner__hero-placeholder {
-    background-color: #f0f0f0;
-  }
-
-  /* Desktop: text content overlaid bottom-left on the image */
   .gift-banner__hero-content {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    z-index: 2;
-    max-width: 1400px;
-    padding: 60px 40px;
-    width: 100%;
+    
+    padding:70px 48px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap:50px ;
+    background: transparent;
   }
 
   .gift-banner__heading {
-    font-family: 'Georgia', 'Times New Roman', serif;
-    font-size: clamp(2.25rem, 5vw, 3.25rem);
-    font-weight: 400;
+    font-family: Jost;
+    font-size: 70px;
+    font-weight: 500;
     line-height: 1.1;
     margin: 0;
     color: #000;
+    letter-spacing: 0px;
+
   }
 
   .gift-banner__description {
     font-size: 0.8125rem;
     line-height: 1.7;
     color: #333;
-    max-width: 360px;
+    max-width: 400px;
   }
 
   .gift-banner__description p {
-    margin: 0;
+    
+    font-family: jost;
+    font-weight: 400;
+    font-size: 17px;
   }
 
-  /* Shop Button — black with arrow slide animation */
+  /* ------- SHOP NOW BUTTON ------- */
   .gift-banner__shop-btn {
     display: inline-flex;
     align-items: center;
-    gap: 14px;
-    padding: 14px 28px;
+    gap: 20px;
+    padding: 14px 50px;
     background-color: #000;
     color: #fff;
-    font-size: 0.6875rem;
-    font-weight: 600;
-    letter-spacing: 0.1em;
+    font-size: .6875rem;
+    font-weight: 400;
+    letter-spacing: .1em;
     text-transform: uppercase;
     text-decoration: none;
     border: none;
     cursor: pointer;
     width: fit-content;
-    transition: background-color 0.3s ease;
+    transition: background-color .3s ease;
   }
 
   .gift-banner__shop-arrow {
@@ -314,7 +364,6 @@
     height: 12px;
   }
 
-  /* Arrow slides right on hover */
   .gift-banner__shop-btn:hover .gift-banner__shop-arrow {
     transform: translateX(5px);
   }
@@ -323,7 +372,7 @@
     background-color: #222;
   }
 
-  /* Mobile shop button: hidden on desktop */
+  /* Mobile button variant: hidden on desktop */
   .gift-banner__shop-btn--mobile {
     display: none;
   }
@@ -346,63 +395,173 @@
   }
 
   /* ===========================================================
-     MOBILE RESPONSIVE (<750px)
-     On mobile, the Figma shows:
-     - No top bar (header handles branding)
-     - Heading + description appear ABOVE the illustration image
-     - "SHOP NOW" button centered at bottom of the image
-     - Sustainability strip below
+     MOBILE (<768px)
+     Same background image as desktop, content overlaid on top.
+     Heading + description + SHOP NOW all centered on the image.
+     No white backgrounds. No separate image block.
      =========================================================== */
-  @media screen and (max-width: 749px) {
-    /* Hide the top bar on mobile (the store header handles it) */
+  @media screen and (max-width: 768px) {
+
+    /* Switch to mobile hero background image */
+    .gift-banner {
+      background-image: var(--mobile-hero-bg);
+      background-size: cover;
+      background-position: center center;
+      background-color: #f5f5f5;
+    }
+
+    /* Mobile topbar — hamburger left, brand centered */
     .gift-banner__topbar {
+      display: block;
+      padding: 14px 0;
+      background: #f5f5f5;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .gift-banner__topbar-inner {
+      display: grid;
+      grid-template-columns: 48px 1fr 48px;
+      align-items: center;
+      padding: 0 16px;
+      gap: 0;
+    }
+
+    /* Show hamburger, hide close by default */
+    .gift-banner__hamburger {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+    }
+
+    .gift-banner__close {
+      display: none;
+      align-items: center;
+      justify-content: flex-start;
+    }
+
+    .gift-banner__brand {
+      text-align: center;
+      font-family: 'Jost', sans-serif;
+      font-weight: 700;
+      font-size: 1.25rem;
+      letter-spacing: 0.08em;
+    }
+
+    /* Hide promo message and CTA in topbar-inner on mobile */
+    .gift-banner__message {
       display: none;
     }
 
-    /* Show mobile text block above image */
-    .gift-banner__mobile-text {
+    .gift-banner__cta-btn {
+      display: none;
+    }
+
+    /* --- OPEN STATE: swap hamburger → X, show drawer --- */
+    .gift-banner__topbar--open .gift-banner__hamburger {
+      display: none;
+    }
+
+    .gift-banner__topbar--open .gift-banner__close {
+      display: flex;
+    }
+
+    .gift-banner__topbar--open .gift-banner__drawer {
       display: flex;
       flex-direction: column;
       align-items: center;
+      gap: 20px;
+      padding: 24px 20px 28px;
+      background: #f5f5f5;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .gift-banner__drawer-message {
+      margin: 0;
+      font-family: 'Jost', sans-serif;
+      font-size: 0.9375rem;
+      font-weight: 400;
+      color: #333;
       text-align: center;
-      padding: 32px 24px 20px;
-      gap: 10px;
-      background-color: #fff;
     }
 
-    .gift-banner__mobile-text .gift-banner__heading {
-      font-size: 1.75rem;
-    }
-
-    .gift-banner__mobile-text .gift-banner__description {
-      max-width: 320px;
-      font-size: 0.8125rem;
-    }
-
-    /* Reduce hero image height on mobile */
-    .gift-banner__hero-media {
-      min-height: 320px;
-    }
-
-    /* Show mobile shop button centered over bottom of image */
-    .gift-banner__shop-btn--mobile {
+    .gift-banner__topbar--open .gift-banner__drawer-cta {
       display: inline-flex;
-      position: absolute;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 3;
-      padding: 14px 32px;
+      padding: 14px 40px;
+      font-family: 'Jost', sans-serif;
     }
 
-    /* Hide desktop hero content on mobile */
-    .gift-banner__hero-content {
+    /* Hide separate mobile elements — not needed, using hero overlay */
+    .gift-banner__mobile-text {
       display: none;
     }
 
-    .gift-banner__strip-text {
-      font-size: 0.5625rem;
+    .gift-banner__mobile-media {
+      display: none;
+    }
+
+    /* Show hero on mobile — reposition for centered layout */
+    .gift-banner__hero {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      min-height: auto;
+    }
+
+    .gift-banner__hero-content {
+      align-items: center;
+      text-align: center;
+      padding: 16px 24px 32px;
+      gap: 14px;
+      width: 100%;
+      background: rgba(255, 255, 255, 0.75);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+    }
+
+    /* Mobile heading */
+    .gift-banner__heading {
+      font-family: 'Jost', sans-serif;
+      font-size: 1.75rem;
+      font-weight: 600;
+      letter-spacing: 0;
+      line-height: 1.15;
+      color: #000;
+    }
+
+    /* Mobile description */
+    .gift-banner__description {
+      max-width: 260px;
+      margin: 0 auto;
+    }
+
+    .gift-banner__description p {
+      font-family: 'Jost', sans-serif;
+      font-weight: 400;
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      color: #333;
+    }
+
+    /* Mobile SHOP NOW button — centered */
+    .gift-banner__shop-btn {
+      align-self: center;
+      padding: 14px 36px;
+      gap: 16px;
+      font-family: 'Jost', sans-serif;
+      font-size: 0.6875rem;
+      font-weight: 400;
       letter-spacing: 0.1em;
+    }
+
+    /* Strip */
+    .gift-banner__strip {
+      background-color: #f5f5f5;
+    }
+
+    .gift-banner__strip-text {
+      font-family: 'Jost', sans-serif;
+      font-size: 0.5625rem;
+      letter-spacing: 0.12em;
     }
   }
 {% endstylesheet %}
@@ -447,7 +606,12 @@
     {
       "type": "image_picker",
       "id": "hero_image",
-      "label": "Background image"
+      "label": "Desktop background image (overrides default)"
+    },
+    {
+      "type": "image_picker",
+      "id": "mobile_hero_image",
+      "label": "Mobile hero image (overrides default)"
     },
     {
       "type": "text",
